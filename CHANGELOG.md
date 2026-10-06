@@ -6,6 +6,20 @@ and this library adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Address validation and payment recipients accept ZIP 316 Revision 2 unified addresses. A payment to a
+  Revision 2 address fails if the address has expired, or would expire before the transaction does.
+
+### Changed
+
+- The Rust backend builds against the librustzcash NU7 pre-releases (`zcash_protocol` 0.11.0-pre.0).
+  Testnet transactions from height 4,465,026 on use consensus branch id `0x77190ad9`; earlier builds sign
+  them with the NU6.3 id, which lightwalletd rejects. Mainnet has no NU7 activation height and is unchanged.
+- The first open of a wallet database migrates it to the `zcash_client_sqlite` 0.23 schema. Builds without
+  this change cannot open a migrated database.
+- `VotingSdk`: every call throws, because `zcash_voting` has no release for these crates.
+
 ## [3.2.1] - 2026-09-15
 
 ### Changed
