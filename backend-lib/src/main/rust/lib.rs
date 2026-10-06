@@ -330,20 +330,36 @@ pub extern "C" fn Java_cash_z_ecc_android_sdk_internal_jni_RustBackend_initDataD
 
 const JNI_ACCOUNT: &str = "cash/z/ecc/android/sdk/internal/model/JniAccount";
 
+/// zcash_keys encodes unified addresses and viewing keys as ZIP 316 Revision 2, which earlier
+/// SDK releases cannot parse. Without metadata the Revision 0 encoding holds the same items.
+fn encode_revision_0<T: Encoding>(encoded: String) -> String {
+    match T::decode(&encoded) {
+        Ok((net, _, container)) if container.metadata_items().is_empty() => {
+            T::try_from_items(unified::Revision::R0, container.items_as_parsed().to_vec())
+                .map(|container| container.encode(&net))
+                .unwrap_or(encoded)
+        }
+        _ => encoded,
+    }
+}
+
 fn encode_account<'a, P: Parameters>(
     env: &mut JNIEnv<'a>,
     network: &P,
     account: zcash_client_sqlite::wallet::Account,
 ) -> jni::errors::Result<JObject<'a>> {
     let ufvk = match account.ufvk() {
-        Some(ufvk) => env.new_string(ufvk.encode(network))?.into(),
+        Some(ufvk) => env
+            .new_string(encode_revision_0::<unified::Ufvk>(ufvk.encode(network)))?
+            .into(),
         None => JObject::null(),
     };
 
     let uivk = match account.ufvk() {
         Some(ufvk) => {
             let uivk = ufvk.to_unified_incoming_viewing_key();
-            env.new_string(uivk.encode(network))?.into()
+            env.new_string(encode_revision_0::<unified::Uivk>(uivk.encode(network)))?
+                .into()
         }
         None => JObject::null(),
     };
@@ -770,7 +786,9 @@ pub extern "C" fn Java_cash_z_ecc_android_sdk_internal_jni_RustBackend_getCurren
             UnifiedAddressRequest::AllAvailableKeys,
         ) {
             Ok(Some(addr)) => {
-                let addr_str = addr.encode(&network);
+                let addr_str = encode_revision_0::<unified::Address>(
+                    addr.encode_receiver_preserving(&network),
+                );
                 let output = env
                     .new_string(addr_str)
                     .expect("Couldn't create Java string!");
@@ -931,7 +949,8 @@ pub extern "C" fn Java_cash_z_ecc_android_sdk_internal_jni_RustBackend_getNextAv
 
         match db_data.get_next_available_address(account_uuid, address_request) {
             Ok(Some((ua, _))) => {
-                let addr_str = ua.encode(&network);
+                let addr_str =
+                    encode_revision_0::<unified::Address>(ua.encode_receiver_preserving(&network));
                 let output = env
                     .new_string(addr_str)
                     .expect("Couldn't create Java string!");
@@ -2846,7 +2865,11 @@ pub extern "C" fn Java_cash_z_ecc_android_sdk_internal_jni_RustDerivationTool_de
                     .map_err(|e| {
                         anyhow!("error generating unified spending key from seed: {:?}", e)
                     })
-                    .map(|usk| usk.to_unified_full_viewing_key().encode(&network))
+                    .map(|usk| {
+                        encode_revision_0::<unified::Ufvk>(
+                            usk.to_unified_full_viewing_key().encode(&network),
+                        )
+                    })
             })
             .collect::<Result<_, _>>()?;
 
@@ -2887,7 +2910,8 @@ pub extern "C" fn Java_cash_z_ecc_android_sdk_internal_jni_RustDerivationTool_de
                 UnifiedAddressRequest::AllAvailableKeys,
             )
             .expect("At least one Unified Address should be derivable");
-        let address_str = ua.encode(&network);
+        let address_str =
+            encode_revision_0::<unified::Address>(ua.encode_receiver_preserving(&network));
         let output = env
             .new_string(address_str)
             .expect("Couldn't create Java string!");
@@ -2914,7 +2938,8 @@ pub extern "C" fn Java_cash_z_ecc_android_sdk_internal_jni_RustDerivationTool_de
         // Derive the default Unified Address (containing the default Sapling payment
         // address that older SDKs used).
         let (ua, _) = ufvk.default_address(UnifiedAddressRequest::AllAvailableKeys)?;
-        let address_str = ua.encode(&network);
+        let address_str =
+            encode_revision_0::<unified::Address>(ua.encode_receiver_preserving(&network));
         let output = env
             .new_string(address_str)
             .expect("Couldn't create Java string!");
@@ -2940,7 +2965,7 @@ pub extern "C" fn Java_cash_z_ecc_android_sdk_internal_jni_RustDerivationTool_de
         let ufvk = usk.to_unified_full_viewing_key();
 
         let output = env
-            .new_string(ufvk.encode(&network))
+            .new_string(encode_revision_0::<unified::Ufvk>(ufvk.encode(&network)))
             .expect("Couldn't create Java string!");
 
         Ok(output.into_raw())

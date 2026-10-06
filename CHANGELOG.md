@@ -9,7 +9,8 @@ and this library adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Address validation and payment recipients accept ZIP 316 Revision 2 unified addresses. A payment to a
-  Revision 2 address fails if the address has expired, or would expire before the transaction does.
+  Revision 2 address fails if the address has expired, or would expire before the transaction does. Addresses
+  and viewing keys the SDK returns are still Revision 0 encodings.
 
 ### Changed
 
